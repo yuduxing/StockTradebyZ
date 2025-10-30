@@ -10,6 +10,8 @@ from typing import Any, Dict, Iterable, List
 
 import pandas as pd
 
+from feishu_notifier import FeishuNotifier
+
 # ---------- 日志 ----------
 logging.basicConfig(
     level=logging.INFO,
@@ -35,6 +37,21 @@ def load_data(data_dir: Path, codes: Iterable[str]) -> Dict[str, pd.DataFrame]:
         df = pd.read_csv(fp, parse_dates=["date"]).sort_values("date")
         frames[code] = df
     return frames
+
+
+def load_stock_names(stocklist_path: Path) -> Dict[str, str]:
+    """加载股票代码到名称的映射"""
+    if not stocklist_path.exists():
+        logger.warning("股票列表文件 %s 不存在", stocklist_path)
+        return {}
+    try:
+        # 确保 symbol 列作为字符串读取，保留前导零
+        df = pd.read_csv(stocklist_path, dtype={"symbol": str})
+        # 使用 symbol 作为 key (如 000001)，name 作为 value
+        return dict(zip(df["symbol"], df["name"]))
+    except Exception as e:
+        logger.warning("加载股票名称失败: %s", e)
+        return {}
 
 
 def load_config(cfg_path: Path) -> List[Dict[str, Any]]:
@@ -83,6 +100,8 @@ def main():
     p.add_argument("--config", default="./configs.json", help="Selector 配置文件")
     p.add_argument("--date", help="交易日 YYYY-MM-DD；缺省=数据最新日期")
     p.add_argument("--tickers", default="all", help="'all' 或逗号分隔股票代码列表")
+    p.add_argument("--feishu-webhook", help="飞书机器人 Webhook URL，用于发送通知")
+    p.add_argument("--feishu-rich", action="store_true", help="使用富文本格式发送飞书消息")
     args = p.parse_args()
 
     # --- 加载行情 ---
@@ -113,6 +132,15 @@ def main():
     if not args.date:
         logger.info("未指定 --date，使用最近日期 %s", trade_date.date())
 
+    # --- 加载股票名称映射 ---
+    stock_names = load_stock_names(data_dir.parent / "stocklist.csv")
+
+    # --- 初始化飞书通知器 ---
+    feishu = None
+    if args.feishu_webhook:
+        feishu = FeishuNotifier(args.feishu_webhook)
+        logger.info("已启用飞书通知")
+
     # --- 加载 Selector 配置 ---
     selector_cfgs = load_config(Path(args.config))
 
@@ -133,7 +161,35 @@ def main():
         logger.info("============== 选股结果 [%s] ==============", alias)
         logger.info("交易日: %s", trade_date.date())
         logger.info("符合条件股票数: %d", len(picks))
-        logger.info("%s", ", ".join(picks) if picks else "无符合条件股票")
+        if picks:
+            # 格式化输出：代码(名称)
+            formatted_picks = [
+                f"{code}({stock_names.get(code, '未知')})" for code in picks
+            ]
+            logger.info("%s", ", ".join(formatted_picks))
+        else:
+            logger.info("无符合条件股票")
+
+        # 发送飞书通知
+        if feishu:
+            try:
+                if args.feishu_rich:
+                    feishu.send_rich_text(
+                        title=f"选股结果 - {alias}",
+                        alias=alias,
+                        trade_date=str(trade_date.date()),
+                        picks=picks,
+                        stock_names=stock_names
+                    )
+                else:
+                    feishu.send_stock_picks(
+                        alias=alias,
+                        trade_date=str(trade_date.date()),
+                        picks=picks,
+                        stock_names=stock_names
+                    )
+            except Exception as e:
+                logger.error("发送飞书通知失败: %s", e)
 
 
 if __name__ == "__main__":

@@ -104,6 +104,37 @@ python select_stock.py \
 
 > `--date` 可省略，默认取数据中的最后交易日。
 
+### 飞书通知（可选）
+
+支持通过飞书机器人发送选股结果通知：
+
+```bash
+python select_stock.py \
+  --data-dir ./data \
+  --config ./configs.json \
+  --feishu-webhook "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
+```
+
+**获取飞书 Webhook URL**：
+
+1. 在飞书群聊中添加"自定义机器人"
+2. 复制生成的 Webhook URL
+3. 使用 `--feishu-webhook` 参数传入
+
+**可选参数**：
+
+* `--feishu-rich`：使用富文本格式发送消息（更美观）
+
+示例：
+
+```bash
+# 发送纯文本通知
+python select_stock.py --feishu-webhook "your-webhook-url"
+
+# 发送富文本通知
+python select_stock.py --feishu-webhook "your-webhook-url" --feishu-rich
+```
+
 ---
 
 ## 参数说明
@@ -125,11 +156,14 @@ python select_stock.py \
 
 ### `select_stock.py`
 
-| 参数           | 默认值              | 说明       |
-| ------------ | ---------------- | -------- |
-| `--data-dir` | `./data`         | CSV 行情目录 |
-| `--config`   | `./configs.json` | 选择器配置    |
-| `--date`     | 数据最后交易日          | 选股交易日    |
+| 参数                  | 默认值              | 说明                       |
+| ------------------- | ---------------- | ------------------------ |
+| `--data-dir`        | `./data`         | CSV 行情目录                 |
+| `--config`          | `./configs.json` | 选择器配置                    |
+| `--date`            | 数据最后交易日          | 选股交易日                    |
+| `--feishu-webhook`  | 无                | 飞书机器人 Webhook URL（可选）   |
+| `--feishu-rich`     | `False`          | 使用富文本格式发送飞书消息（可选）        |
+| `--tickers`         | `all`            | 'all' 或逗号分隔的股票代码列表（可选） |
 
 ---
 
@@ -300,14 +334,16 @@ python select_stock.py \
 
 ```
 .
-├── configs.json             # 选择器参数（示例见上文）
-├── fetch_kline.py           # 从 stocklist.csv 读取并抓取 Tushare 日线（qfq）
-├── select_stock.py          # 批量选股入口
-├── Selector.py              # 策略实现（含公共指标/过滤）
-├── stocklist.csv            # 你的股票池（示例列：ts_code/symbol/...）
-├── data/                    # 行情 CSV 输出目录
-├── fetch.log                # 抓取日志
-└── select_results.log       # 选股日志
+├── configs.json                  # 选择器参数（示例见上文）
+├── fetch_kline.py                # 从 stocklist.csv 读取并抓取 Tushare 日线（qfq）
+├── select_stock.py               # 批量选股入口
+├── Selector.py                   # 策略实现（含公共指标/过滤）
+├── feishu_notifier.py            # 飞书通知模块
+├── feishu_config.example.json    # 飞书配置示例
+├── stocklist.csv                 # 你的股票池（示例列：ts_code/symbol/...）
+├── data/                         # 行情 CSV 输出目录
+├── fetch.log                     # 抓取日志
+└── select_results.log            # 选股日志
 ```
 
 ---
